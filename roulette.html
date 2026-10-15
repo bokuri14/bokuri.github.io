@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おてがるシンプルWEBルーレット</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        h1, h3 { text-align: center; }
+
+        /* ルーレットと針の配置 */
+        .roulette-wrapper {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 15px auto;
+        }
+        /* 上部の赤色の針（三角形） */
+        .pointer {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 14px solid transparent;
+            border-right: 14px solid transparent;
+            border-top: 24px solid #ff3b30;
+            z-index: 10;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
+        }
+        canvas {
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+
+        /* === 当選結果表示（通常時） === */
+        #result-display {
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            min-height: 4rem;
+            color: #2c3e50;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+
+        /* === 当選結果表示（ド派手な決定時演出） === */
+        #result-display.winner {
+            font-size: 2.2rem; /* 文字を大きく */
+            color: #e53935;
+            background-color: #fff9db;
+            border: 3px dashed #ffb703;
+            box-shadow: 0 6px 15px rgba(255, 183, 3, 0.4);
+            animation: pop-winner 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* ポップに弾けるアニメーション */
+        @keyframes pop-winner {
+            0% { transform: scale(0.3); opacity: 0; }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ボタンデザイン */
+        .btn {
+            font-size: 1rem;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-start {
+            background-color: #22ffed;
+            color: #333333;
+            width: 100%;
+            font-size: 1.2rem;
+            padding: 12px;
+        }
+        .btn-add { background-color: #2196f3; color: #fff; width: 100%; margin-top: 8px; }
+        .btn-delete { background-color: #ff4d4f; color: #fff; padding: 4px 8px; font-size: 0.85rem; }
+        .btn-preset { background-color: #5aeb5f; color: #fff; }
+
+        /* 候補入力リスト */
+        .candidate-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .candidate-item input[type="text"] {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* 色選択の円形ボタン */
+        .color-picker-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+            transition: transform 0.1s;
+        }
+        .color-picker-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* === 16色カラーパレットのポップアップ === */
+        .color-palette-popover {
+            position: absolute;
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            z-index: 100;
+            display: none;
+            width: 180px;
+        }
+        .color-palette-popover p {
+            margin: 0 0 8px 0;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #666;
+            text-align: center;
+        }
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .color-swatch {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .color-swatch:hover {
+            transform: scale(1.2);
+        }
+
+        /* プリセットエリア */
+        .preset-area {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        .preset-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .preset-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 4px 10px;
+            border-radius: 16px;
+        }
+        .preset-save-box {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .preset-save-box input { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>おてがるルーレット</h1>
+
+    <!-- 1. ルーレット描画エリア -->
+    <div class="roulette-wrapper">
+        <div class="pointer"></div>
+        <canvas id="rouletteCanvas" width="300" height="300"></canvas>
+    </div>
+
+    <!-- 当選結果 -->
+    <div id="result-display">↓スタートを押してね↓</div>
+
+    <!-- スタートボタン -->
+    <button class="btn btn-start" onclick="spin()">ルーレットスタート！</button>
+
+    <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+
+    <!-- 2. 候補編集エリア -->
+    <h3>候補リスト</h3>
+    <div id="candidate-list"></div>
+    <button class="btn btn-add" onclick="addCandidate()">＋ 候補を追加 </button>
+
+    <!-- 3. プリセット機能エリア -->
+    <div class="preset-area">
+        <h4 style="margin: 0 0 10px 0;">保存済みプリセット</h4>
+        <div class="preset-list" id="preset-list"></div>
+
+        <div class="preset-save-box">
+            <input type="text" id="preset-name" placeholder="現在の構成をプリセット名で保存">
+            <button class="btn btn-preset" onclick="saveCurrentPreset()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 4. 色選択パレット（浮動ポップアップ） -->
+<div id="color-popover" class="color-palette-popover">
+    <p>色を選択</p>
+    <div id="color-grid" class="color-grid"></div>
+</div>
+
+<script>
+    // === 標準的な見やすい16色（パキッとしたカラー） ===
+    const presetColors = [
+        "#E53935", // 赤
+        "#F57C00", // オレンジ
+        "#FBC02D", // 黄
+        "#43A047", // 緑
+        "#00ACC1", // シアン・水色
+        "#1E88E5", // 青
+        "#3949AB", // インディゴ・紺
+        "#8E24AA", // 紫
+        "#D81B60", // ピンク
+        "#795548", // 茶色
+        "#607D8B", // グレー
+        "#00897B", // ティール・深緑
+        "#C0CA33", // ライム
+        "#FB8C00", // 濃いオレンジ
+        "#E91E63", // ローズ
+        "#546E7A"  // ダークスレート
+    ];
+
+    // 初期候補（5色）
+    let candidates = [
+        { name: "1.", color: "#E53935" },
+        { name: "2.", color: "#F57C00" },
+        { name: "3.", color: "#FBC02D" },
+        { name: "4.", color: "#43A047" },
+        { name: "5.", color: "#1E88E5" }
+    ];
+
+    let currentAngle = 0;
+    let isSpinning = false;
+    let activeCandidateIndex = null; // 現在色を変更しようとしている候補の番号
+
+    // --- ① 描画処理 ---
+    const canvas = document.getElementById("rouletteCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function drawRoulette() {
+        const numItems = candidates.length;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = centerX;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (numItems === 0) return;
+
+        const anglePerItem = (2 * Math.PI) / numItems;
+
+        for (let i = 0; i < numItems; i++) {
+            const startAngle = currentAngle + i * anglePerItem;
+            const endAngle = startAngle + anglePerItem;
+
+            // 扇形
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+            ctx.fillStyle = candidates[i].color;
+            ctx.fill();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // テキスト（白文字＋暗めの影で見やすく）
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(startAngle + anglePerItem / 2);
+            ctx.textAlign = "right";
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 16px sans-serif";
+            ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+            ctx.shadowBlur = 4;
+            ctx.fillText(candidates[i].name, radius - 20, 6);
+            ctx.restore();
+        }
+    }
+
+    // --- ② ルーレットの回転アニメーション ---
+    function spin() {
+        if (isSpinning) return;
+        if (candidates.length === 0) {
+            alert("候補を追加してください！");
+            return;
+        }
+
+        closeColorPalette();
+        isSpinning = true;
+
+        const resultDisplay = document.getElementById("result-display");
+        resultDisplay.classList.remove("winner");
+        resultDisplay.innerText = "結果は...!?";
+
+        const spinDuration = 4000;
+        const totalRotation = Math.PI * 2 * (5 + Math.floor(Math.random() * 3)) + Math.random() * Math.PI * 2;
+        const startAngle = currentAngle;
+        const startTime = performance.now();
+
+        function animate(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / spinDuration, 1);
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+
+            currentAngle = startAngle + totalRotation * easeOut;
+            drawRoulette();
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                isSpinning = false;
+                determineWinner();
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    // 当選者の計算＆ド派手演出
+    function determineWinner() {
+        const numItems = candidates.length;
+        const anglePerItem = (2 * Math.PI) / numItems;
+
+        let pointerAngle = (1.5 * Math.PI - (currentAngle % (2 * Math.PI))) % (2 * Math.PI);
+        if (pointerAngle < 0) pointerAngle += 2 * Math.PI;
+
+        const winningIndex = Math.floor(pointerAngle / anglePerItem);
+        const winner = candidates[winningIndex];
+
+        const resultDisplay = document.getElementById("result-display");
+        resultDisplay.innerText = "🎉 " + winner.name + " 🎉";
+        resultDisplay.classList.add("winner");
+    }
+
+    // --- ③ 候補の追加・編集・削除 ---
+    function renderCandidateInputs() {
+        const container = document.getElementById("candidate-list");
+        container.innerHTML = "";
+
+        candidates.forEach((item, index) => {
+            const div = document.createElement("div");
+            div.className = "candidate-item";
+
+            div.innerHTML = `
+                <button type="button" class="color-picker-btn" style="background-color: ${item.color};" onclick="openColorPalette(${index}, event)"></button>
+                <input type="text" value="${item.name}" oninput="updateName(${index}, this.value)">
+                <button class="btn btn-delete" onclick="deleteCandidate(${index})">削除</button>
+            `;
+            container.appendChild(div);
+        });
+
+        drawRoulette();
+    }
+
+    // --- ④ 16色ポップアップパレットの制御 ---
+    function initColorPalette() {
+        const grid = document.getElementById("color-grid");
+        grid.innerHTML = "";
+
+        presetColors.forEach(colorHex => {
+            const swatch = document.createElement("div");
+            swatch.className = "color-swatch";
+            swatch.style.backgroundColor = colorHex;
+            swatch.onclick = function() {
+                if (activeCandidateIndex !== null) {
+                    candidates[activeCandidateIndex].color = colorHex;
+                    renderCandidateInputs();
+                    closeColorPalette();
+                }
+            };
+            grid.appendChild(swatch);
+        });
+    }
+
+    function openColorPalette(index, event) {
+        event.stopPropagation();
+        activeCandidateIndex = index;
+
+        const popover = document.getElementById("color-popover");
+        const rect = event.target.getBoundingClientRect();
+        
+        // ボタンのすぐ下にパレットを配置
+        popover.style.top = (window.scrollY + rect.bottom + 6) + "px";
+        popover.style.left = (window.scrollX + rect.left) + "px";
+        popover.style.display = "block";
+    }
+
+    function closeColorPalette() {
+        document.getElementById("color-popover").style.display = "none";
+        activeCandidateIndex = null;
+    }
+
+    // パレット外の画面を押したら閉じる
+    document.addEventListener("click", function(e) {
+        const popover = document.getElementById("color-popover");
+        if (popover && !popover.contains(e.target)) {
+            closeColorPalette();
+        }
+    });
+
+    function addCandidate() {
+        const nextNum = candidates.length + 1;
+        const nextColor = presetColors[candidates.length % presetColors.length];
+        candidates.push({ name: `${nextNum}.`, color: nextColor });
+        renderCandidateInputs();
+    }
+
+    function updateName(index, value) {
+        candidates[index].name = value;
+        drawRoulette();
+    }
+
+    function deleteCandidate(index) {
+        candidates.splice(index, 1);
+        renderCandidateInputs();
+    }
+
+    // --- ⑤ プリセット保存機能（LocalStorage） ---
+    let presets = JSON.parse(localStorage.getItem("roulette_presets")) || {};
+
+    function renderPresetList() {
+        const container = document.getElementById("preset-list");
+        container.innerHTML = "";
+
+        Object.keys(presets).forEach(name => {
+            const chip = document.createElement("div");
+            chip.className = "preset-chip";
+            chip.innerHTML = `
+                <span style="cursor:pointer; font-weight:bold;" onclick="loadPreset('${name}')">📁 ${name}</span>
+                <span style="cursor:pointer; color:#ff4d4f; margin-left:4px;" onclick="deletePreset('${name}')">×</span>
+            `;
+            container.appendChild(chip);
+        });
+    }
+
+    function loadPreset(name) {
+        candidates = JSON.parse(JSON.stringify(presets[name]));
+        renderCandidateInputs();
+
+        const resultDisplay = document.getElementById("result-display");
+        resultDisplay.classList.remove("winner");
+        resultDisplay.innerText = `「${name}」を読み込みました`;
+    }
+
+    function saveCurrentPreset() {
+        const input = document.getElementById("preset-name");
+        const name = input.value.trim();
+        if (!name) {
+            alert("プリセット名を入力してください");
+            return;
+        }
+
+        presets[name] = JSON.parse(JSON.stringify(candidates));
+        localStorage.setItem("roulette_presets", JSON.stringify(presets));
+        
+        input.value = "";
+        renderPresetList();
+        alert(`プリセット「${name}」を保存しました！`);
+    }
+
+    function deletePreset(name) {
+        if (confirm(`プリセット「${name}」を削除しますか？`)) {
+            delete presets[name];
+            localStorage.setItem("roulette_presets", JSON.stringify(presets));
+            renderPresetList();
+        }
+    }
+
+    // 初期化
+    initColorPalette();
+    renderCandidateInputs();
+    renderPresetList();
+</script>
+
+</body>
+</html>
