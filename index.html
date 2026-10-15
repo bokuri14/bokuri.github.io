@@ -234,6 +234,54 @@
             <button class="btn btn-preset" onclick="saveCurrentPreset()">保存</button>
         </div>
     </div>
+
+    <!-- 3.5 みんなのプリセット (世界共有) エリア -->
+    <div class="preset-area" style="margin-top: 20px; background: #ffffff; border-radius: 12px; padding: 18px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <h4 style="margin: 0; font-size: 1.1rem; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                <span>🌐</span> みんなのプリセット <span style="font-size: 0.75rem; font-weight: normal; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 12px;">世界共有</span>
+            </h4>
+        </div>
+
+        <!-- 投稿フォーム -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+            <div style="font-weight: bold; font-size: 0.85rem; margin-bottom: 8px; color: #334155;">現在の構成をみんなに公開</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <input type="text" id="share-title" placeholder="タイトル (例: 今夜の夕食決め)" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <select id="share-category" style="padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white; font-size: 0.85rem; flex: 1; min-width: 120px;">
+                        <option value="#ゲーム">#ゲーム</option>
+                        <option value="#罰ゲーム">#罰ゲーム</option>
+                        <option value="#日常・お悩み">#日常・お悩み</option>
+                        <option value="#パーティー">#パーティー</option>
+                        <option value="#勉強・仕事">#勉強・仕事</option>
+                        <option value="#その他" selected>#その他</option>
+                    </select>
+                    <button class="btn" style="background-color: #6366f1; color: white; padding: 8px 14px; border-radius: 6px; font-size: 0.9rem;" onclick="shareCurrentPreset()">🌐 公開する</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 検索・ソートコントロール -->
+        <div style="margin-bottom: 12px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                <input type="text" id="shared-search-input" placeholder="🔍 検索 (タイトル・候補名)" style="flex: 1; min-width: 140px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem;" oninput="filterAndRenderSharedPresets()">
+                <select id="shared-sort-select" style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; background: white; font-size: 0.85rem;" onchange="filterAndRenderSharedPresets()">
+                    <option value="newest">🆕 新着順</option>
+                    <option value="likes">👍 いいね順</option>
+                    <option value="used">🎮 使用回数順</option>
+                </select>
+            </div>
+
+            <!-- カテゴリタブ -->
+            <div id="category-tabs" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px;"></div>
+        </div>
+
+        <!-- 共有プリセットカード一覧 -->
+        <div id="shared-preset-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; padding-right: 2px;">
+            <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 0.9rem;">読み込み中...</div>
+        </div>
+    </div>
 </div>
 
 <!-- 4. 色選択パレット（浮動ポップアップ） -->
@@ -369,7 +417,7 @@
         const winner = candidates[winningIndex];
 
         const resultDisplay = document.getElementById("result-display");
-        resultDisplay.innerText = "🎉 " + winner.name + " 🎉";
+        resultDisplay.innerText =  winner.name + "!!";
         resultDisplay.classList.add("winner");
     }
 
@@ -511,6 +559,292 @@
     initColorPalette();
     renderCandidateInputs();
     renderPresetList();
+
+    // グローバル参照保持 (モジュールスクリプト連携用)
+    window.candidates = candidates;
+    window.renderCandidateInputs = renderCandidateInputs;
+</script>
+
+<!-- ⑥ みんなのプリセット (Firebase Firestore共有) モジュール -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, updateDoc, doc, increment, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Firebase初期設定
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-roulette-app';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' 
+        ? JSON.parse(__firebase_config) 
+        : {
+            apiKey: "AIzaSyDemoKeyOnly",
+            authDomain: "demo.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:demo"
+          };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let rawSharedPresets = [];
+    let selectedCategory = "#すべて";
+
+    const categories = ["#すべて", "#ゲーム", "#罰ゲーム", "#日常・お悩み", "#パーティー", "#勉強・仕事", "#その他"];
+    const sharedColRef = collection(db, 'artifacts', appId, 'public', 'data', 'shared_presets');
+
+    // 認証初期化 (Rule 3 準拠)
+    async function initAuth() {
+        try {
+            const authToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            if (authToken) {
+                const userCred = await signInWithCustomToken(auth, authToken);
+                currentUser = userCred.user;
+            } else {
+                const userCred = await signInAnonymously(auth);
+                currentUser = userCred.user;
+            }
+        } catch (e) {
+            try {
+                const userCred = await signInAnonymously(auth);
+                currentUser = userCred.user;
+            } catch (err) {
+                console.error("Firebase auth failed:", err);
+            }
+        }
+
+        if (currentUser) {
+            initCategoryTabs();
+            listenToSharedPresets();
+        }
+    }
+
+    // カテゴリタブ描画
+    function initCategoryTabs() {
+        const tabsContainer = document.getElementById("category-tabs");
+        if (!tabsContainer) return;
+        tabsContainer.innerHTML = "";
+
+        categories.forEach(cat => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = cat;
+            const isActive = cat === selectedCategory;
+            btn.style.cssText = `
+                padding: 4px 10px;
+                font-size: 0.78rem;
+                border-radius: 12px;
+                border: 1px solid ${isActive ? '#6366f1' : '#cbd5e1'};
+                background: ${isActive ? '#6366f1' : '#ffffff'};
+                color: ${isActive ? '#ffffff' : '#475569'};
+                cursor: pointer;
+                white-space: nowrap;
+                font-weight: ${isActive ? 'bold' : 'normal'};
+                transition: all 0.15s ease;
+            `;
+            btn.onclick = () => {
+                selectedCategory = cat;
+                initCategoryTabs();
+                window.filterAndRenderSharedPresets();
+            };
+            tabsContainer.appendChild(btn);
+        });
+    }
+
+    // リアルタイム受信 (Rule 2 準拠: メモリ側処理)
+    function listenToSharedPresets() {
+        onSnapshot(sharedColRef, (snapshot) => {
+            rawSharedPresets = [];
+            snapshot.forEach((docSnap) => {
+                rawSharedPresets.push({
+                    id: docSnap.id,
+                    ...docSnap.data()
+                });
+            });
+            window.filterAndRenderSharedPresets();
+        }, (error) => {
+            console.error("Shared presets snapshot error:", error);
+        });
+    }
+
+    // フィルタリング・ソート・描画
+    window.filterAndRenderSharedPresets = function() {
+        const listContainer = document.getElementById("shared-preset-list");
+        if (!listContainer) return;
+
+        const searchInput = document.getElementById("shared-search-input");
+        const sortSelect = document.getElementById("shared-sort-select");
+
+        const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+        const sortVal = sortSelect ? sortSelect.value : "newest";
+
+        let filtered = rawSharedPresets.filter(p => {
+            if (selectedCategory !== "#すべて" && p.category !== selectedCategory) {
+                return false;
+            }
+            if (query) {
+                const titleMatch = (p.title || "").toLowerCase().includes(query);
+                const catMatch = (p.category || "").toLowerCase().includes(query);
+                const itemsMatch = (p.items || []).some(item => (item.name || "").toLowerCase().includes(query));
+                if (!titleMatch && !catMatch && !itemsMatch) return false;
+            }
+            return true;
+        });
+
+        // ソート処理
+        filtered.sort((a, b) => {
+            if (sortVal === "likes") {
+                return (b.likes || 0) - (a.likes || 0);
+            } else if (sortVal === "used") {
+                return (b.usedCount || 0) - (a.usedCount || 0);
+            } else { // newest
+                return (b.createdAt || 0) - (a.createdAt || 0);
+            }
+        });
+
+        if (filtered.length === 0) {
+            listContainer.innerHTML = `<div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 0.85rem;">該当するプリセットが見つかりませんでした</div>`;
+            return;
+        }
+
+        listContainer.innerHTML = "";
+        filtered.forEach(preset => {
+            const card = document.createElement("div");
+            card.style.cssText = `
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 10px 12px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            `;
+
+            const itemsPreview = (preset.items || []).slice(0, 4).map(it => `
+                <span style="display: inline-flex; align-items: center; gap: 3px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; color: #334155;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background-color: ${it.color}; display: inline-block;"></span>
+                    <span>${escapeHtml(it.name)}</span>
+                </span>
+            `).join('');
+
+            const extraCount = (preset.items || []).length > 4 ? `<span style="font-size: 0.75rem; color: #64748b;">+${preset.items.length - 4}</span>` : '';
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                    <div>
+                        <span style="font-size: 0.75rem; color: #6366f1; background: #eef2ff; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">${escapeHtml(preset.category || '#その他')}</span>
+                        <strong style="font-size: 0.95rem; color: #1e293b;">${escapeHtml(preset.title || '無題')}</strong>
+                    </div>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px;">
+                    ${itemsPreview} ${extraCount}
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; pt-2; border-top: 1px solid #f1f5f9;">
+                    <div style="display: flex; gap: 10px; font-size: 0.78rem; color: #64748b;">
+                        <span>🎮 ${preset.usedCount || 0}回</span>
+                        <span>👍 ${preset.likes || 0}</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn" style="background: #f1f5f9; color: #334155; font-size: 0.78rem; padding: 4px 8px; border: 1px solid #cbd5e1;" onclick="likeSharedPreset('${preset.id}')">👍 いいね</button>
+                        <button type="button" class="btn" style="background: #22c55e; color: white; font-size: 0.78rem; padding: 4px 10px;" onclick="loadSharedPreset('${preset.id}')">📥 読み込む</button>
+                    </div>
+                </div>
+            `;
+            listContainer.appendChild(card);
+        });
+    };
+
+    // 公開機能
+    window.shareCurrentPreset = async function() {
+        if (!currentUser) {
+            alert("接続を準備中です。少し待ってからお試しください。");
+            return;
+        }
+        const titleInput = document.getElementById("share-title");
+        const categorySelect = document.getElementById("share-category");
+        const title = titleInput.value.trim();
+
+        if (!title) {
+            alert("プリセットのタイトルを入力してください");
+            return;
+        }
+        if (!window.candidates || window.candidates.length === 0) {
+            alert("候補を追加してください");
+            return;
+        }
+
+        try {
+            const newPreset = {
+                title: title,
+                category: categorySelect.value,
+                items: JSON.parse(JSON.stringify(window.candidates)),
+                likes: 0,
+                usedCount: 0,
+                createdAt: Date.now()
+            };
+            await addDoc(sharedColRef, newPreset);
+            titleInput.value = "";
+            alert(`「みんなのプリセット」に『${title}』を公開しました！`);
+        } catch (err) {
+            console.error("Share error:", err);
+            alert("公開に失敗しました。もう一度お試しください。");
+        }
+    };
+
+    // いいね機能
+    window.likeSharedPreset = async function(id) {
+        if (!currentUser || !id) return;
+        try {
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'shared_presets', id);
+            await updateDoc(docRef, {
+                likes: increment(1)
+            });
+        } catch (err) {
+            console.error("Like error:", err);
+        }
+    };
+
+    // 読み込み機能
+    window.loadSharedPreset = async function(id) {
+        const preset = rawSharedPresets.find(p => p.id === id);
+        if (!preset) return;
+
+        // 使用回数カウントアップ
+        if (currentUser) {
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'shared_presets', id);
+                await updateDoc(docRef, {
+                    usedCount: increment(1)
+                });
+            } catch (err) {
+                console.error("Increment usedCount error:", err);
+            }
+        }
+
+        // ルーレットの候補リストへ書き換え
+        window.candidates.length = 0;
+        preset.items.forEach(item => window.candidates.push(JSON.parse(JSON.stringify(item))));
+
+        if (window.renderCandidateInputs) {
+            window.renderCandidateInputs();
+        }
+
+        const resultDisplay = document.getElementById("result-display");
+        if (resultDisplay) {
+            resultDisplay.classList.remove("winner");
+            resultDisplay.innerText = `みんなのプリセット「${preset.title}」を読み込みました`;
+        }
+    };
+
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // 認証開始
+    initAuth();
 </script>
 
 </body>
