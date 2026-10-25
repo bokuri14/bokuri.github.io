@@ -64,21 +64,20 @@
             transition: all 0.2s ease;
         }
 
-        /* === 当選結果表示（ド派手な決定時演出） === */
+        /* === 当選結果表示（落ち着いた決定時演出） === */
         #result-display.winner {
-            font-size: 2.2rem; /* 文字を大きく */
-            color: #e53935;
-            background-color: #fff9db;
-            border: 3px dashed #ffb703;
-            box-shadow: 0 6px 15px rgba(255, 183, 3, 0.4);
-            animation: pop-winner 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 1.4rem;
+            color: #1a365d;
+            background-color: #ebf8ff;
+            border: 1px solid #90cdf4;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            animation: fade-in-winner 0.5s ease-out;
         }
 
-        /* ポップに弾けるアニメーション */
-        @keyframes pop-winner {
-            0% { transform: scale(0.3); opacity: 0; }
-            70% { transform: scale(1.15); }
-            100% { transform: scale(1); opacity: 1; }
+        /* 穏やかなフェードインアニメーション */
+        @keyframes fade-in-winner {
+            0% { opacity: 0; transform: translateY(-5px); }
+            100% { opacity: 1; transform: translateY(0); }
         }
 
         /* ボタンデザイン */
@@ -132,7 +131,7 @@
             transform: scale(1.1);
         }
 
-        /* === 16色カラーパレットのポップアップ === */
+        /* === 25色カラーパレットのポップアップ === */
         .color-palette-popover {
             position: absolute;
             background: #ffffff;
@@ -142,7 +141,7 @@
             box-shadow: 0 6px 20px rgba(0,0,0,0.15);
             z-index: 100;
             display: none;
-            width: 180px;
+            width: max-content;
         }
         .color-palette-popover p {
             margin: 0 0 8px 0;
@@ -153,7 +152,7 @@
         }
         .color-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 8px;
         }
         .color-swatch {
@@ -212,7 +211,7 @@
     </div>
 
     <!-- 当選結果 -->
-    <div id="result-display">↓スタートを押してね↓</div>
+    <div id="result-display"></div>
 
     <!-- スタートボタン -->
     <button class="btn btn-start" onclick="spin()">ルーレットスタート！</button>
@@ -221,6 +220,9 @@
 
     <!-- 2. 候補編集エリア -->
     <h3>候補リスト</h3>
+    <div style="font-size: 0.85rem; margin-bottom: 8px; text-align: right;">
+        <label><input type="checkbox" id="auto-remove"> 当選した候補を自動で削除する</label>
+    </div>
     <div id="candidate-list"></div>
     <button class="btn btn-add" onclick="addCandidate()">＋ 候補を追加 </button>
 
@@ -291,24 +293,13 @@
 </div>
 
 <script>
-    // === 標準的な見やすい16色（パキッとしたカラー） ===
+    // === 25色のグラデーションカラーパレット ===
     const presetColors = [
-        "#E53935", // 赤
-        "#F57C00", // オレンジ
-        "#FBC02D", // 黄
-        "#43A047", // 緑
-        "#00ACC1", // シアン・水色
-        "#1E88E5", // 青
-        "#3949AB", // インディゴ・紺
-        "#8E24AA", // 紫
-        "#D81B60", // ピンク
-        "#795548", // 茶色
-        "#607D8B", // グレー
-        "#00897B", // ティール・深緑
-        "#C0CA33", // ライム
-        "#FB8C00", // 濃いオレンジ
-        "#E91E63", // ローズ
-        "#546E7A"  // ダークスレート
+        "#E53935", "#F4511E", "#FB8C00", "#FFB300", "#FDD835", // 赤〜黄
+        "#C0CA33", "#7CB342", "#43A047", "#00897B", "#00ACC1", // ライム〜ティール
+        "#039BE5", "#1E88E5", "#3949AB", "#5E35B1", "#8E24AA", // 青〜紫
+        "#D81B60", "#E91E63", "#F06292", "#F48FB1", "#FFCDD2", // ピンク系
+        "#424242", "#757575", "#BDBDBD", "#E0E0E0", "#F5F5F5"  // モノクロ系
     ];
 
     // 初期候補（5色）
@@ -405,7 +396,7 @@
         requestAnimationFrame(animate);
     }
 
-    // 当選者の計算＆ド派手演出
+    // 当選者の計算＆落ち着いた演出
     function determineWinner() {
         const numItems = candidates.length;
         const anglePerItem = (2 * Math.PI) / numItems;
@@ -417,8 +408,15 @@
         const winner = candidates[winningIndex];
 
         const resultDisplay = document.getElementById("result-display");
-        resultDisplay.innerText =  winner.name + "!!";
+        resultDisplay.innerText =  "結果は" + winner.name + "でした！";
         resultDisplay.classList.add("winner");
+
+        // 自動削除機能
+        const autoRemove = document.getElementById("auto-remove")?.checked;
+        if (autoRemove) {
+            candidates.splice(winningIndex, 1);
+            renderCandidateInputs();
+        }
     }
 
     // --- ③ 候補の追加・編集・削除 ---
